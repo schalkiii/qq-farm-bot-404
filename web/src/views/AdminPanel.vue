@@ -142,6 +142,7 @@ const {
 
 const systemSettingsSaving = ref(false)
 const napcatLoginSaving = ref(false)
+const napcatDeployed = ref(false)
 const anySystemSaving = computed(() => systemSettingsSaving.value || systemConfigSaving.value || captureConfigSaving.value || deviceProtocolSaving.value || napcatLoginSaving.value)
 
 async function saveSystemSettings() {
@@ -166,6 +167,7 @@ async function saveSystemSettings() {
     if (!systemResult.data?.ok || !captureResult.data?.ok || !deviceResult.data?.ok)
       throw new Error('部分系统配置保存失败')
     await Promise.all([loadSystemConfig(), loadCaptureConfig(), fetchDeviceProtocol()])
+    await loadNapcatLoginStatus()
     showAlert('系统配置已统一保存并生效')
   }
   catch (error: any) {
@@ -173,6 +175,17 @@ async function saveSystemSettings() {
   }
   finally {
     systemSettingsSaving.value = false
+  }
+}
+
+// NapCat 容器是否已部署由后端根据 WebUI/OpenAuth 地址与 Token 判定，前端不猜。
+async function loadNapcatLoginStatus() {
+  try {
+    const { data } = await api.get('/api/admin/napcat-login/status')
+    napcatDeployed.value = data?.ok && data.data?.deployed === true
+  }
+  catch {
+    napcatDeployed.value = false
   }
 }
 
@@ -187,6 +200,9 @@ async function saveNapcatLoginSetting() {
     })
     if (!result.data?.ok)
       throw new Error(result.data?.error || '保存失败')
+    napcatDeployed.value = result.data?.data?.deployed === true
+    // 以服务端回读为准，避免开关显示与持久化结果不一致。
+    await loadSystemConfig()
     showAlert('QQ 扫码登录设置已保存')
   }
   catch (error: any) {
@@ -326,6 +342,7 @@ onMounted(() => {
   fetchCardClaimStatus()
   loadSystemConfig()
   loadCaptureConfig()
+  loadNapcatLoginStatus()
   fetchDeviceProtocol()
   loadAnnouncement()
 })
@@ -521,6 +538,7 @@ onMounted(() => {
           :capture-config-saving="captureConfigSaving"
           :capture-config-testing="captureConfigTesting"
           :napcat-login-saving="napcatLoginSaving"
+          :napcat-deployed="napcatDeployed"
           @save-napcat-login="saveNapcatLoginSetting"
         />
       </div>

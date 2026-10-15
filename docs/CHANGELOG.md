@@ -25,11 +25,30 @@ flowchart TB
 
     O --> P[2026-10-15 · v2.8.0<br/>奶茶热销中活动与经营自动化]
 
+    P --> Q[2026-10-15<br/>NapCat Windows WSLC 部署]
+
     classDef seed fill:#e8f8ee,stroke:#20b967,color:#183d2a,stroke-width:2px;
-    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P seed;
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q seed;
 ```
 
 ## 详细记录
+### 2026-10-15 · 修复 QQ 扫码登录开关无法保存
+
+- 修复 `store.setSystemConfig()` 仅落盘 `serverUrl`、`clientVersion`、`platform`、`os` 四个字段的问题：`napcatLoginEnabled` 之前会被静默丢弃，导致面板里打开开关并保存后读回即为空、开关立刻回弹，NapCat 扫码始终无法启用。系统配置默认值同步登记该字段，重置时明确关闭。
+- 拆分“容器已部署”和“开关已开启”两个概念：新增 `isDeployed()` 只判定 WebUI/OpenAuth 地址与内部 Token 是否齐备，`isConfigured()` 仍要求登录开关开启，二者不再混为一谈。
+- 「系统配置 → QQ 扫码登录」的 NapCat 容器状态不再写死为“需要单独部署”，改为按后端探测结果显示“已部署/未部署”，提示文案随之说明还缺哪一步；保存设置后以服务端回读值刷新开关，显示与实际持久化结果一致。
+- 「新增账号 → QQ 扫码」标签的能力判定改用 `isConfigured()`：容器未部署时不再暴露一个必然报错的扫码入口。
+- 新增开关持久化、部署状态与开关拆分的测试；`napcat-login` 测试改用独立临时数据目录，避免开发机真实 `core/data` 配置影响断言。后端 443 项测试通过，前端 `vue-tsc` 类型检查与生产构建通过，改动文件的 lint 问题数与改动前完全一致。
+
+### 2026-10-15 · NapCat Windows/WSLC 部署
+
+- 新增 `napcat-wslc.ps1`，在 Windows 上用系统自带的 WSL 容器命令行 `wslc` 构建并运行 NapCat 派生镜像，无需 Docker Desktop；镜像定义仍复用 `napcat/Dockerfile` 与 `napcat/docker-entrypoint.sh`，不引入第二套构建流程。
+- 容器参数与 Compose 的 `napcat` 服务逐项对齐：设备名称默认取 `COMPUTERNAME`（可用 `-DeviceName`/`NAPCAT_DEVICE_NAME` 覆盖）、`--shm-size 1g`、同一组 Electron 软件渲染环境变量、WebUI 仅绑定 `127.0.0.1:6099`、三份挂载路径不变。
+- 持久化数据沿用仓库上级目录的 `data/napcat/`，与 Docker 部署共用同一份配置、内部 Token 和 QQ 登录记录；Token 仍由容器首次启动生成并通过文件共享给后端，不写入环境变量。
+- `start.bat` 在检测到 `data\napcat\auth\token` 时自动注入 `NAPCAT_WEBUI_URL`、`NAPCAT_OPENAUTH_URL` 与 `NAPCAT_TOKEN_FILE`；未发现该文件时行为完全不变，纯抓包和微信扫码用户不受影响，NapCat 登录开关仍只由面板“系统配置”控制。
+- 文档明确 Windows 原生 `NapCat.Shell` 的取舍：该方式把插件注入本机已安装的 QQ，与日常 QQ 共用 `%APPDATA%\QQ` 和这台机器的真实设备身份，并会抢占同一个 QQ 客户端实例，因此不作为推荐路径；容器方案保持隔离的 Linux QQ 与独立登录数据目录。
+- 移除 `napcat/napcat/` 下与上层逐字节重复的 Dockerfile、entrypoint 和 OpenAuth 插件副本，全仓库确认无任何引用。
+
 ### 2026-09-08 · NapCat QQ 扫码登录与 Docker 部署
 
 - 将 QQ MiniApp OpenAuth 能力直接集成到项目中，新增受管理后台鉴权保护的 NapCat 登录任务接口，可完成 QQ 扫码、确认登录、获取农场 Code、添加账号和退出临时 QQ 会话的完整流程。

@@ -1,5 +1,15 @@
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
+
+// 这些用例会读写系统配置，必须与开发机上的真实 core/data 隔离，
+// 否则本机已开启的 NapCat 开关会让断言随环境漂移。
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-farm-napcat-login-'));
+process.env.FARM_DATA_DIR = dataDir;
+test.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 
 function json(payload) {
   return { ok: true, status: 200, async text() { return JSON.stringify(payload); } };
@@ -10,6 +20,87 @@ test('NapCat login stays disabled unless explicitly enabled', () => {
   delete require.cache[require.resolve('../src/services/napcat-login')];
   const service = require('../src/services/napcat-login');
   assert.equal(service.isConfigured(), false);
+});
+
+test('the NapCat login toggle survives a system config round-trip', () => {
+  const store = require('../src/models/store');
+  store.setSystemConfig({
+    serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
+    clientVersion: '1.13.0.5_20260723',
+    platform: 'qq',
+    os: 'iOS',
+    napcatLoginEnabled: true,
+  });
+  assert.equal(store.getSystemConfig().napcatLoginEnabled, true);
+
+  // 其他调用方以展开写法更新无关字段时，不能顺带把开关关掉。
+  store.setSystemConfig({ ...store.getSystemConfig(), clientVersion: '1.13.1.6_20260729' });
+  assert.equal(store.getSystemConfig().napcatLoginEnabled, true);
+
+  // 只接受显式布尔 true，脏值一律按关闭处理。
+  store.setSystemConfig({ ...store.getSystemConfig(), napcatLoginEnabled: 'yes' });
+  assert.equal(store.getSystemConfig().napcatLoginEnabled, false);
+  store.setSystemConfig({ ...store.getSystemConfig(), napcatLoginEnabled: false });
+});
+
+test('NapCat deployment is reported independently from the login toggle', () => {
+  const store = require('../src/models/store');
+  process.env.NAPCAT_LOGIN_ENABLED = 'false';
+  process.env.NAPCAT_TOKEN = 'napcat-test-token';
+  process.env.NAPCAT_WEBUI_URL = 'http://napcat-deploy.test/api';
+  process.env.NAPCAT_OPENAUTH_URL = 'http://napcat-deploy.test/plugin';
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  const service = require('../src/services/napcat-login');
+
+  // 容器已部署但开关关闭：入口不应开放。
+  assert.equal(service.isDeployed(), true);
+  assert.equal(service.isConfigured(), false);
+
+  store.setSystemConfig({ ...store.getSystemConfig(), napcatLoginEnabled: true });
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  const enabledService = require('../src/services/napcat-login');
+  assert.equal(enabledService.isConfigured(), true);
+
+  // 缺少 Token 时即使开关为真也不视为可用。
+  process.env.NAPCAT_TOKEN = '';
+  process.env.NAPCAT_TOKEN_FILE = path.join(dataDir, 'missing-token');
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  assert.equal(require('../src/services/napcat-login').isDeployed(), false);
+  delete process.env.NAPCAT_TOKEN_FILE;
+});
+
+test('NapCat prefers the shared token file over the environment value', async (t) => {
+  // Windows 侧部署时 Token 由容器写入共享文件，行尾可能带 CRLF，需按最新内容取用。
+  const tokenFile = path.join(os.tmpdir(), `napcat-token-${crypto.randomBytes(6).toString('hex')}.token`);
+  fs.writeFileSync(tokenFile, 'file-token\r\n');
+  t.after(() => fs.rmSync(tokenFile, { force: true }));
+  Object.assign(process.env, {
+    NAPCAT_LOGIN_ENABLED: 'true',
+    NAPCAT_TOKEN: 'env-token',
+    NAPCAT_TOKEN_FILE: tokenFile,
+    NAPCAT_WEBUI_URL: 'http://napcat-file.test/api',
+    NAPCAT_OPENAUTH_URL: 'http://napcat-file.test/plugin',
+  });
+  const expectedHash = crypto.createHash('sha256').update('file-token.napcat').digest('hex');
+  const originalFetch = globalThis.fetch;
+  const loginHashes = [];
+  globalThis.fetch = async (url, options) => {
+    const pathname = new URL(String(url)).pathname;
+    if (pathname.endsWith('/auth/login')) {
+      loginHashes.push(JSON.parse(options.body).hash);
+      return json({ code: 0, data: { Credential: 'credential' } });
+    }
+    if (pathname.endsWith('/QQLogin/CheckLoginStatus')) return json({ code: 0, data: { isLogin: false, isOffline: false } });
+    if (pathname.endsWith('/QQLogin/GetQQLoginQrcode')) return json({ code: 0, data: { qrcode: 'https://example.test/qr' } });
+    return json({ code: 0 });
+  };
+  t.after(() => { globalThis.fetch = originalFetch; delete process.env.NAPCAT_TOKEN_FILE; });
+
+  delete require.cache[require.resolve('../src/services/napcat-login')];
+  const service = require('../src/services/napcat-login');
+  const task = await service.create('alice');
+  assert.deepEqual(loginHashes, [expectedHash]);
+  await service.cancel(task.taskId, 'alice');
 });
 
 test('NapCat QR flow obtains code, logs out, and enforces task ownership', async (t) => {

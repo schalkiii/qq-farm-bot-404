@@ -24,12 +24,17 @@ function config() {
   };
 }
 
-function isConfigured() {
+// NapCat 容器本身是否已部署：WebUI/OpenAuth 地址与内部 Token 齐备，与登录开关无关。
+function isDeployed() {
   const cfg = config();
+  return Boolean(cfg.webui && cfg.webuiToken && cfg.plugin && cfg.pluginToken);
+}
+
+function isConfigured() {
   const systemConfig = store.getSystemConfig();
   const enabled = systemConfig?.napcatLoginEnabled
     || /^(?:1|true|yes|on)$/i.test(String(process.env.NAPCAT_LOGIN_ENABLED || ''));
-  return enabled && Boolean(cfg.webui && cfg.webuiToken && cfg.plugin && cfg.pluginToken);
+  return Boolean(enabled) && isDeployed();
 }
 
 async function requestJson(url, { method = 'POST', body, token = '', timeout = 15000 } = {}) {
@@ -246,4 +251,4 @@ async function cancel(id, owner) {
   await release(task, task.status === 'confirmed' ? 'logout' : task.status === 'scanned' ? 'restart' : '');
 }
 
-module.exports = { APP_ID, isConfigured, create, status, code, cancel };
+module.exports = { APP_ID, isDeployed, isConfigured, create, status, code, cancel };

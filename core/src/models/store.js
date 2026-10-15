@@ -1930,7 +1930,9 @@ function setSystemConfig(config) {
         serverUrl: String(config.serverUrl || '').trim(),
         clientVersion: String(config.clientVersion || '').trim(),
         platform: String(config.platform || 'qq').trim(),
-        os: String(config.os || 'iOS').trim()
+        os: String(config.os || 'iOS').trim(),
+        // QQ 扫码登录开关必须与其余字段一同落盘，否则保存后读回即丢失。
+        napcatLoginEnabled: config.napcatLoginEnabled === true
     };
     saveGlobalConfig();
     return { ...globalConfig.systemConfig };

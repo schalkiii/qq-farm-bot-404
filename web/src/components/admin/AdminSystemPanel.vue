@@ -18,12 +18,14 @@ const props = withDefaults(defineProps<{
   captureConfigSaving: boolean
   captureConfigTesting: boolean
   napcatLoginSaving?: boolean
+  napcatDeployed?: boolean
   showHeading?: boolean
   showSave?: boolean
 }>(), {
   showHeading: true,
   showSave: true,
   napcatLoginSaving: false,
+  napcatDeployed: false,
 })
 
 defineEmits<{
@@ -271,14 +273,19 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
             <div class="text-xs text-gray-500 dark:text-gray-400">
               NapCat 容器
             </div>
-            <div class="mt-1 font-semibold">
-              需要单独部署
+            <div class="mt-1 font-semibold" :class="napcatDeployed ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'">
+              {{ napcatDeployed ? '已部署' : '未部署' }}
             </div>
           </div>
         </div>
 
         <div class="rounded-2xl bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 mb-3">
-          开启后，用户可在「新增账号 → QQ 扫码」中扫描二维码完成登录。需要先部署 NapCat 容器。
+          <template v-if="napcatDeployed">
+            已检测到 NapCat 容器。开启后，可在「新增账号 → QQ 扫码」中扫描二维码完成登录。
+          </template>
+          <template v-else>
+            未检测到 NapCat 容器，需先完成部署（Docker Compose 的 napcat profile，或 Windows 上执行 .\napcat-wslc.ps1 up）。仅开启开关不会使其生效。
+          </template>
         </div>
 
         <div class="grid grid-cols-1 gap-3 text-sm">

@@ -28,7 +28,8 @@ const DEFAULT_SYSTEM_CONFIG = {
     serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
     clientVersion: DEFAULT_CLIENT_VERSION,
     platform: 'qq',
-    os: 'iOS'
+    os: 'iOS',
+    napcatLoginEnabled: false
 };
 
 // 运行时配置（可被系统配置覆盖）

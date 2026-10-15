@@ -200,6 +200,38 @@ QQ 登录记录中的设备名称，然后由 Compose 启动农场和 NapCat 两
 通过 Docker Desktop 运行相应 Linux 架构镜像。官方没有 32 位 `linux/386` 镜像。可在 `.env`
 中通过 `NAPCAT_IMAGE` 选择示例文件列出的其他多架构版本。
 
+### QQ/NapCat 扫码（Windows / WSLC，可选）
+
+Windows 机器不想安装 Docker Desktop 时，可以用系统自带的 WSL 容器命令行 `wslc` 运行同一个派生镜像。
+前置要求是 WSL 2.9.3 及以上（`wsl --version` 确认，必要时 `wsl --update`），且 `wslc version` 可执行。
+
+```powershell
+.\napcat-wslc.ps1 up
+```
+
+脚本会构建 `napcat/Dockerfile` 派生镜像并以分离模式启动 NapCat，参数与 Compose 中的 `napcat` 服务一一对应：
+
+- 设备名称默认取本机 `COMPUTERNAME`，可用 `-DeviceName` 或环境变量 `NAPCAT_DEVICE_NAME` 覆盖；
+- 配置、内部 Token 和 QQ 登录数据写入仓库上级目录的 `data/napcat/`，与 Docker 部署共用同一份持久化数据；
+- WebUI 仍只绑定 `127.0.0.1:6099`，`/dev/shm` 与软件渲染等容器参数保持一致。
+
+容器内运行的仍是官方 Linux QQ 镜像，因此与本机 Windows QQ 客户端互不影响：农场号不会进入本机 QQ 的登录记录，
+设备身份也是容器内的独立 Linux 环境。官方 `NapCat.Shell.zip` 的 Windows 用法是把插件注入本机已安装的 QQ，
+两者共用 `%APPDATA%\QQ` 和这台机器的真实设备身份，还会与日常使用的 QQ 客户端互相抢占同一个客户端实例，
+所以本项目不把它作为推荐路径。
+
+随后用 `start.bat` 启动农场：检测到 `data\napcat\auth\token` 时会自动注入 `NAPCAT_WEBUI_URL`、
+`NAPCAT_OPENAUTH_URL` 和 `NAPCAT_TOKEN_FILE`，无需把密钥写进环境变量；再在“系统配置 → QQ 扫码登录”里
+确认 NapCat 容器显示“已部署”，打开开关即可。“未部署”说明后端没读到容器地址或 Token，通常是农场进程
+早于 Token 文件启动，重启 `start.bat` 即可。常用命令：`.\napcat-wslc.ps1 status`、`logs`、`down`；直连
+Docker Hub 受限时用 `-BaseImage` 指定可用的镜像加速源全名。`wslc` 目前没有 Compose 的 `restart` 策略，
+重启系统后需再执行一次 `.\napcat-wslc.ps1 up`。
+
+> [!NOTE]
+> Windows 数据目录绑定挂载进容器后按挂载选项呈现为可写、不受 Unix 权限位约束，容器内 entrypoint 对 Token
+> 文件的 `chmod 600` 不会生效，因此该文件对本机的其他进程可读。WebUI 仍只监听 `127.0.0.1`，且数据目录
+> 位于当前用户拥有的路径下，实际暴露面与本机用户等同；如需更严格的隔离，请改用 Linux 主机上的 Docker 部署。
+
 ### 微信扫码
 
 1. 进入“添加账号 → 微信扫码”。
@@ -234,6 +266,7 @@ iPhone及安卓用户也可使用内置抓包登录服务自动获取登录 Code
 | `pnpm build:web` | 构建前端 |
 | `pnpm lint` | 检查前后端代码 |
 | `pnpm -C core test` | 运行后端测试 |
+| `.\napcat-wslc.ps1 up` | Windows 上用 WSLC 启动 NapCat（`status`/`logs`/`down`） |
 | `pnpm package:release` | 构建各平台二进制文件 |
 
 二进制构建产物位于 `core/dist/`。首次运行时，程序会在数据目录中生成账号、日志和缓存等文件。

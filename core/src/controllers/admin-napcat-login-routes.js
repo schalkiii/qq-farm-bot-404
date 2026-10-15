@@ -5,15 +5,22 @@ function owner(req) { return String(req.currentUser?.username || ''); }
 function sendError(res, error) { res.status(400).json({ ok: false, error: error.message || 'NapCat 登录失败' }); }
 
 function registerAdminNapcatLoginRoutes({ app, requireAdminToken, requireAdminRole, requireDangerConfirmation }) {
+  // QQ 扫码标签需要同时满足“开关已开启”和“NapCat 容器已部署”，
+  // 否则标签内每个请求都会立刻失败，不应给出必然报错的入口。
   app.get('/api/napcat-login/capability', (_req, res) => {
-    const systemConfig = store.getSystemConfig() || {};
-    res.json({ ok: true, data: { enabled: systemConfig.napcatLoginEnabled === true } });
+    res.json({ ok: true, data: { enabled: napcatLogin.isConfigured() } });
   });
 
   app.get('/api/admin/napcat-login/status', requireAdminToken, requireAdminRole, (_req, res) => {
     try {
       const systemConfig = store.getSystemConfig() || {};
-      res.json({ ok: true, data: { enabled: systemConfig.napcatLoginEnabled === true } });
+      res.json({
+        ok: true,
+        data: {
+          enabled: systemConfig.napcatLoginEnabled === true,
+          deployed: napcatLogin.isDeployed(),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });
     }
@@ -24,8 +31,14 @@ function registerAdminNapcatLoginRoutes({ app, requireAdminToken, requireAdminRo
       if (!requireDangerConfirmation(req, res, 'UPDATE_NAPCAT_LOGIN_STATUS')) return;
       const { enabled } = req.body || {};
       const current = store.getSystemConfig() || {};
-      store.setSystemConfig({ ...current, napcatLoginEnabled: enabled === true });
-      res.json({ ok: true, data: { enabled: enabled === true } });
+      const saved = store.setSystemConfig({ ...current, napcatLoginEnabled: enabled === true });
+      res.json({
+        ok: true,
+        data: {
+          enabled: saved?.napcatLoginEnabled === true,
+          deployed: napcatLogin.isDeployed(),
+        },
+      });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });
     }
