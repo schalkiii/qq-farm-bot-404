@@ -47,8 +47,10 @@ if not exist "%~dp0web\dist\index.html" (
     )
 )
 
-REM NapCat 容器由 Docker Compose 或 napcat-wslc.ps1 启动，两者都把内部 Token 写在同一份文件里；
-REM 只有该文件存在时才注入 NapCat 地址，纯抓包/微信扫码用户不受影响。
+REM NapCat is started either by docker compose or by napcat-wslc.ps1; both write the same
+REM internal token file. Inject the NapCat endpoints only when that file exists, so capture
+REM and WeChat users are untouched. Keep this file ASCII: cmd reads batch files in the
+REM console codepage, and UTF-8 comments can decode into bytes that swallow quotes.
 if exist "%NAPCAT_AUTH_DIR%\token" (
     echo [INFO] NapCat token file detected, wiring QQ scan login endpoints...
     set "NAPCAT_WEBUI_URL=http://127.0.0.1:6099/api"
