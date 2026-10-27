@@ -255,7 +255,7 @@ iPhone及安卓用户也可使用内置抓包登录服务自动获取登录 Code
 4. 完全关闭并重新打开 QQ 农场，等待面板获取 Code。
 5. 完成后关闭手机 Wi-Fi 代理。
 
-证书安装、局域网和 Tailscale 配置请查看[抓包登录服务手册](core/docs/capture-service.md)。
+证书安装、局域网和 Tailscale 配置在「添加账号 → 抓包登录」页按提示完成。
 
 ## 🛠️ 常用命令
 
@@ -287,7 +287,7 @@ qq-farm-bot/
 
 ## 📖 使用文档
 
-- [iPhone 抓包登录服务](core/docs/capture-service.md)
+- 抓包登录的证书安装、局域网与 Tailscale 配置在面板「添加账号 → 抓包登录」页按提示完成，维护者手册位于本地 `core/docs/`（该目录不入库）
 - [限时活动适配手册](core/docs/activity-update-runbook.md)
 - [TSDK/WASM 更新手册](core/docs/tsdk-update-runbook.md)
 - [TSDK/ACE 运行机制](core/docs/tsdk-ace-runtime.md)

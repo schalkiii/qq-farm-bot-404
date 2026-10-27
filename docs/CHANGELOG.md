@@ -27,11 +27,26 @@ flowchart TB
 
     P --> Q[2026-10-15<br/>NapCat Windows WSLC 部署]
 
+    Q --> R[2026-10-28<br/>同步上游轻功能包与 PlayerLogin 双端登录]
+
     classDef seed fill:#e8f8ee,stroke:#20b967,color:#183d2a,stroke-width:2px;
-    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q seed;
+    class A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R seed;
 ```
 
 ## 详细记录
+### 2026-10-28 · 修复「微信定时刷新重登」保存无效
+
+- 旧版自动控制页的该卡片把 `@save` / `@refresh` 误绑到系统配置保存函数，`autoCodeRefresh` 从未写库：关闭后落盘仍为 `enabled:true`，定时器照旧按小时取码并报 `ShortLink AppData decrypt/parse failed`，「立即刷新」也只是重复保存了一遍系统配置。
+- 保存改走专用接口 `POST /api/settings/auto-code-refresh`，「立即刷新」改走 `.../run`，保存后以服务端回读值刷新开关，并使用真实的保存中状态。
+
+### 2026-10-28 · 同步上游轻功能包与 PlayerLogin 双端登录
+
+- 升级预估：新增 `level-forecast` 服务，按收获与历史均值分源估算升级进度，并通过 worker 状态与概览卡片展示。
+- 图标映射：`gameConfig` 按 `bundle:icon_res` / `asset_name` 建立别名索引，补齐无独立图片物品的本地图标复用。
+- 奶茶打工页：后端归一化班次工资、互动结果与图标文案占位，前端在活动页新增打工标签。
+- PlayerLogin：新增 `player-login` / `globalscenepb` proto，QQ 与微信客户端版本号分档，支持 1.15 二段式登录（PlayerLogin + PlayerSceneLogin），并按平台构建 TSDK（含上游提供的 `tsdk-wx.wasm`）。
+- 合并 `core/src/models/store.js` 冲突时同时保留上游「缺省字段沿用当前值」的系统配置语义、`wxClientVersion` 与本地 `napcatLoginEnabled`，两者互不覆盖；合并后后端 480 项测试通过。
+
 ### 2026-10-15 · 修复 QQ 扫码登录开关无法保存
 
 - 修复 `store.setSystemConfig()` 仅落盘 `serverUrl`、`clientVersion`、`platform`、`os` 四个字段的问题：`napcatLoginEnabled` 之前会被静默丢弃，导致面板里打开开关并保存后读回即为空、开关立刻回弹，NapCat 扫码始终无法启用。系统配置默认值同步登记该字段，重置时明确关闭。
