@@ -23,6 +23,7 @@ import { useAdminUsers } from '@/composables/useAdminUsers'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
 import { useUserSettings } from '@/composables/settings/useUserSettings'
+import { useSettingStore } from '@/stores/setting'
 import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
@@ -139,8 +140,10 @@ const {
   localAutoCodeRefresh,
   autoCodeRefreshing,
   runAutoCodeRefreshNow,
+  syncLocalAutomationSettings,
 } = useAutomationSettings({ currentAccountId, showAlert })
 
+const settingStore = useSettingStore()
 const systemSettingsSaving = ref(false)
 const autoCodeRefreshSaving = ref(false)
 const napcatLoginSaving = ref(false)
@@ -215,6 +218,19 @@ async function saveAutoCodeRefreshSetting() {
     autoCodeRefreshSaving.value = false
   }
 }
+
+// 卡片展示的必须是服务端落盘值：此前该页从未拉取账号设置，界面一直显示默认的关闭状态。
+async function loadAutoCodeRefresh() {
+  const accountId = currentAccountId.value ? String(currentAccountId.value) : ''
+  if (!accountId)
+    return
+  await settingStore.fetchSettings(accountId)
+  syncLocalAutomationSettings()
+}
+
+watch(currentAccountId, () => {
+  void loadAutoCodeRefresh()
+})
 
 // NapCat 容器是否已部署由后端根据 WebUI/OpenAuth 地址与 Token 判定，前端不猜。
 async function loadNapcatLoginStatus() {
@@ -383,6 +399,7 @@ onMounted(() => {
   loadNapcatLoginStatus()
   fetchDeviceProtocol()
   loadAnnouncement()
+  void loadAutoCodeRefresh()
 })
 </script>
 
