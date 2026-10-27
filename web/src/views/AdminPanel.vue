@@ -138,9 +138,11 @@ const {
 const {
   localAutoCodeRefresh,
   autoCodeRefreshing,
+  runAutoCodeRefreshNow,
 } = useAutomationSettings({ currentAccountId, showAlert })
 
 const systemSettingsSaving = ref(false)
+const autoCodeRefreshSaving = ref(false)
 const napcatLoginSaving = ref(false)
 const napcatDeployed = ref(false)
 const anySystemSaving = computed(() => systemSettingsSaving.value || systemConfigSaving.value || captureConfigSaving.value || deviceProtocolSaving.value || napcatLoginSaving.value)
@@ -175,6 +177,42 @@ async function saveSystemSettings() {
   }
   finally {
     systemSettingsSaving.value = false
+  }
+}
+
+// 定时刷新与自动重登按账号保存，必须走专用接口；此前误绑到系统配置保存，
+// 导致开关只改了浏览器里的值，落盘与定时器都没变。
+async function saveAutoCodeRefreshSetting() {
+  const accountId = currentAccountId.value ? String(currentAccountId.value) : ''
+  if (!accountId) {
+    showAlert('请先在账号管理中选择账号', 'danger')
+    return
+  }
+  if (autoCodeRefreshSaving.value)
+    return
+  autoCodeRefreshSaving.value = true
+  try {
+    const intervalMinutes = Math.max(1, Math.min(1440, Math.round(Number(localAutoCodeRefresh.value.intervalMinutes) || 60)))
+    const { data } = await api.post('/api/settings/auto-code-refresh', {
+      enabled: localAutoCodeRefresh.value.enabled === true,
+      intervalMinutes,
+    }, {
+      headers: { 'x-account-id': accountId },
+    })
+    if (!data?.ok)
+      throw new Error(data?.error || '保存失败')
+    // 以服务端回读为准：定时器由后端按落盘值重排，前端显示必须与之一致。
+    localAutoCodeRefresh.value = {
+      enabled: data.data?.autoCodeRefresh?.enabled === true,
+      intervalMinutes: Number(data.data?.autoCodeRefresh?.intervalMinutes) || intervalMinutes,
+    }
+    showAlert(localAutoCodeRefresh.value.enabled ? '定时刷新与自动重登已开启' : '定时刷新与自动重登已关闭', 'primary')
+  }
+  catch (error: any) {
+    showAlert(error.response?.data?.error || error.message || '保存刷新设置失败', 'danger')
+  }
+  finally {
+    autoCodeRefreshSaving.value = false
   }
 }
 
@@ -504,10 +542,10 @@ onMounted(() => {
           :current-account-name="currentAccountName"
           :current-account-id="currentAccountId"
           :loading="accountsLoading"
-          :saving="false"
+          :saving="autoCodeRefreshSaving"
           :refreshing="autoCodeRefreshing"
-          @save="saveSystemSettings"
-          @refresh="saveSystemSettings"
+          @save="saveAutoCodeRefreshSetting"
+          @refresh="runAutoCodeRefreshNow"
         />
 
         <AdminSystemPanel
