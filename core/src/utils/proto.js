@@ -27,6 +27,8 @@ async function loadProto() {
     await root.load([
         getResourcePath('proto', 'game.proto'),
         getResourcePath('proto', 'userpb.proto'),
+        getResourcePath('proto', 'player-login.proto'),
+        getResourcePath('proto', 'globalscenepb.proto'),
         getResourcePath('proto', 'plantpb.proto'),
         getResourcePath('proto', 'corepb.proto'),
         getResourcePath('proto', 'shoppb.proto'),
@@ -51,6 +53,7 @@ async function loadProto() {
         getResourcePath('proto', 'acepb.proto'),
         getResourcePath('proto', 'careerpb.proto'),
         getResourcePath('proto', 'paypb.proto'),
+        getResourcePath('proto', 'solartermspb.proto'),
     ], { keepCase: true });
 
     for (const name of ['MilkTeaOperateRequest', 'MilkTeaOperateReply', 'MilkTeaGetGroupReply']) {
@@ -65,6 +68,11 @@ async function loadProto() {
     // 用户
     types.LoginRequest = root.lookupType('gamepb.userpb.LoginRequest');
     types.LoginReply = root.lookupType('gamepb.userpb.LoginReply');
+    // 1.15 起 QQ 与微信都先做玩家登录，再进入农场场景登录
+    types.PlayerLoginRequest = root.lookupType('gamepb.userpb.PlayerLoginRequest');
+    types.PlayerLoginReply = root.lookupType('gamepb.userpb.PlayerLoginReply');
+    types.PlayerSceneLoginRequest = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginRequest');
+    types.PlayerSceneLoginReply = root.lookupType('gamepb.globalscenepb.PlayerSceneLoginReply');
     types.HeartbeatRequest = root.lookupType('gamepb.userpb.HeartbeatRequest');
     types.HeartbeatReply = root.lookupType('gamepb.userpb.HeartbeatReply');
     types.ReportArkClickRequest = root.lookupType('gamepb.userpb.ReportArkClickRequest');
@@ -196,6 +204,12 @@ async function loadProto() {
     types.ActivityBodyPetDiary = root.lookupType('gamepb.activitypb.ActivityBodyPetDiary');
     types.ActivityPetDiaryPhotoWall = root.lookupType('gamepb.activitypb.PetDiaryPhotoWall');
     types.ActivityPetDiaryPhotoEntry = root.lookupType('gamepb.activitypb.PetDiaryPhotoEntry');
+
+    // 节令日历（SolarTermsV2Service，1.15.0.2_20261001，字段号已对照上游官方编码器恢复结果）
+    for (const name of ['GetSolarTermsV2', 'ClaimSolarTermsV2', 'AnswerSolarTerms', 'ClaimSolarSeason']) {
+        types[`${name}Request`] = root.lookupType(`gamepb.solartermspb.${name}Request`);
+        types[`${name}Reply`] = root.lookupType(`gamepb.solartermspb.${name}Reply`);
+    }
 
     // 天气
     types.GetWeatherStatusRequest = root.lookupType('gamepb.weatherpb.GetWeatherStatusRequest');

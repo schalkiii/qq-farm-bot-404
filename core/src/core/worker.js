@@ -46,6 +46,7 @@ const {
 } = require('../services/friend');
 const { getInteractRecords } = require('../services/interact');
 const { processInviteCodes } = require('../services/invite');
+const { getLevelForecast } = require('../services/level-forecast');
 const {
     autoBuyFertilizer,
     checkAndBuyFertilizerBoth,
@@ -488,6 +489,7 @@ async function runStarActivityAutoClaims() {
     const milkTeaEnabled = Object.keys(require('../services/activity-milk-tea').AUTO_ACTIONS).some(key => automation[key] === true);
     const claimPassport = automation.star_passport_claim === true;
     const claimSolarTerms = automation.star_solar_claim === true;
+    const claimSolarCalendar = automation.solar_calendar_claim === true;
     const claimRecords = automation.star_record_claim === true;
     const claimQingmeiSeedsEnabled = automation.qingmei_seed_claim === true;
     const brewQingmeiWineEnabled = automation.qingmei_wine_brew === true;
@@ -525,7 +527,7 @@ async function runStarActivityAutoClaims() {
         || petDiaryTreasureEnabled || petDiaryCompensationEnabled || petDiaryCharmEnabled || petDiaryBattleFlag;
     const qixiFriendPriority = Array.isArray(automation.qixi_friend_priority)
         ? automation.qixi_friend_priority.map(Number).filter(gid => gid > 0) : [];
-    if (!milkTeaEnabled && !claimPassport && !claimSolarTerms && !claimRecords && !claimQingmeiSeedsEnabled && !brewQingmeiWineEnabled
+    if (!milkTeaEnabled && !claimPassport && !claimSolarTerms && !claimSolarCalendar && !claimRecords && !claimQingmeiSeedsEnabled && !brewQingmeiWineEnabled
         && !useQixiDewEnabled && !buildQixiBridgeEnabled && !giftQixiSachetEnabled
         && !buyRainPoemBottleEnabled && !collectRainPoemWeatherEnabled && !useRainPoemSummonEnabled && !useRainPoemPrankEnabled
         && !unlockRainPoemResearchEnabled && !claimCharityShareEnabled && !donateCharityLoveEnabled
@@ -586,6 +588,30 @@ async function runStarActivityAutoClaims() {
                         result: 'error',
                         termId: Number(term.id) || 0
                     });
+                }
+            }
+        }
+
+        if (claimSolarCalendar) {
+            const { getSolarCalendar, operateSolarCalendar } = require('../services/solar-calendar');
+            const calendar = await getSolarCalendar().catch(error => {
+                log('活动', `节令日历读取失败：${error.message}`, { module: 'activity', event: '节令日历自动检查', result: 'error' });
+                return { events: [], seasons: [] };
+            });
+            for (const event of (calendar.events || []).filter(e => e.canClaim)) {
+                try {
+                    await operateSolarCalendar('claim', { id: event.id });
+                    log('活动', `自动领取节令日历完成：${event.name}`, { module: 'activity', event: '节令日历自动领取', result: 'success', eventId: event.id });
+                } catch (err) {
+                    log('活动', `自动领取节令日历失败: ${err.message}`, { module: 'activity', event: '节令日历自动领取', result: 'error', eventId: event.id });
+                }
+            }
+            for (const season of (calendar.seasons || []).filter(s => s.canClaim)) {
+                try {
+                    await operateSolarCalendar('season', { id: season.id });
+                    log('活动', `自动领取节令季度完成：${season.name || season.id}`, { module: 'activity', event: '节令季度自动领取', result: 'success', seasonId: season.id });
+                } catch (err) {
+                    log('活动', `自动领取节令季度失败: ${err.message}`, { module: 'activity', event: '节令季度自动领取', result: 'error', seasonId: season.id });
                 }
             }
         }
@@ -1334,6 +1360,7 @@ function applyRuntimeConfig(config, syncStatusAfter = false) {
             ) || [
                 'pet_diary_adopt',
                 ...Object.keys(require('../services/activity-milk-tea').AUTO_ACTIONS),
+                'solar_calendar_claim',
                 'pet_diary_feed',
                 'pet_diary_draw',
                 'pet_diary_story_claim',
@@ -1497,11 +1524,12 @@ async function startBot(config) {
     networkEvents.on('kickout', onKickout);
 
     if (onClientVersionUpdate) networkEvents.off('client_version_update', onClientVersionUpdate);
-    onClientVersionUpdate = ({ clientVersion, previous }) => {
+    onClientVersionUpdate = ({ clientVersion, previous, platform }) => {
         sendToMaster({
             type: 'client_version_update',
             clientVersion: String(clientVersion || ''),
-            previous: String(previous || '')
+            previous: String(previous || ''),
+            platform: String(platform || 'qq')
         });
     };
     networkEvents.on('client_version_update', onClientVersionUpdate);
@@ -2080,6 +2108,16 @@ async function handleApiCall(msg) {
                 result = await claimSolarTermsReward(args[0]);
                 break;
             }
+            case 'getSolarCalendar': {
+                const { getSolarCalendar } = require('../services/solar-calendar');
+                result = await getSolarCalendar();
+                break;
+            }
+            case 'operateSolarCalendar': {
+                const { operateSolarCalendar } = require('../services/solar-calendar');
+                result = await operateSolarCalendar(args[0], args[1]);
+                break;
+            }
             case 'claimQingmeiSeeds': {
                 const { claimQingmeiSeeds } = require('../services/activity');
                 result = await claimQingmeiSeeds();
@@ -2313,10 +2351,15 @@ function syncStatus() {
     };
     stats.automation = getAutomation();
     stats.levelProgress = levelProgress;
+    stats.levelForecast = getLevelForecast(
+        userState, levelProgress, stats, stats.automation
+    );
     stats.configRevision = appliedConfigRevision;
 
     const stableStats = { ...stats };
     delete stableStats.nextChecks;
+    // 预测带秒级 generatedAt，若参与哈希每轮轮询都会判定为变化；改由定期全量同步下发。
+    delete stableStats.levelForecast;
     const hash = JSON.stringify(stableStats);
     const now2 = Date.now();
 

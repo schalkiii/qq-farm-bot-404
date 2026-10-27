@@ -257,6 +257,7 @@ const DEFAULT_AUTOMATION = {
     task: true,
     star_passport_claim: false,
     star_solar_claim: false,
+    solar_calendar_claim: false,
     star_record_claim: false,
     qingmei_seed_claim: false,
     qingmei_wine_brew: false,
@@ -1107,6 +1108,7 @@ function loadGlobalConfig() {
             globalConfig.systemConfig = {
                 serverUrl: String(data.systemConfig.serverUrl || '').trim(),
                 clientVersion: String(data.systemConfig.clientVersion || '').trim(),
+                wxClientVersion: String(data.systemConfig.wxClientVersion || '').trim(),
                 platform: String(data.systemConfig.platform || 'qq').trim(),
                 os: String(data.systemConfig.os || 'iOS').trim()
             };
@@ -1926,13 +1928,18 @@ function getSystemConfig() {
 
 function setSystemConfig(config) {
     if (!config || typeof config !== 'object') return null;
+    const current = globalConfig.systemConfig || {};
+    // 旧的调用方（含抓包版本同步）只带自己关心的字段，缺省字段沿用当前值，
+    // 否则一次保存就会把另一个平台的版本号抹掉。
     globalConfig.systemConfig = {
-        serverUrl: String(config.serverUrl || '').trim(),
-        clientVersion: String(config.clientVersion || '').trim(),
-        platform: String(config.platform || 'qq').trim(),
-        os: String(config.os || 'iOS').trim(),
-        // QQ 扫码登录开关必须与其余字段一同落盘，否则保存后读回即丢失。
-        napcatLoginEnabled: config.napcatLoginEnabled === true
+        serverUrl: String(config.serverUrl ?? current.serverUrl ?? '').trim(),
+        clientVersion: String(config.clientVersion ?? current.clientVersion ?? '').trim(),
+        wxClientVersion: String(config.wxClientVersion ?? current.wxClientVersion ?? '').trim(),
+        platform: String(config.platform ?? current.platform ?? 'qq').trim(),
+        os: String(config.os ?? current.os ?? 'iOS').trim(),
+        // QQ 扫码登录开关必须与其余字段一同落盘，否则保存后读回即丢失；
+        // 未携带该字段的调用方沿用当前值，避免抓包版本同步把它顺带关掉。
+        napcatLoginEnabled: (config.napcatLoginEnabled ?? current.napcatLoginEnabled) === true
     };
     saveGlobalConfig();
     return { ...globalConfig.systemConfig };
